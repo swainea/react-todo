@@ -35,9 +35,19 @@ class App extends Component {
       items: [],
       dataSource: ds.cloneWithRows([])
     }
+    this.handleRemoveItem = this.handleRemoveItem.bind(this);
+    this.handleToggleComplete = this.handleToggleComplete.bind(this);
     this.setSource = this.setSource.bind(this);
     this.handleAddItem = this.handleAddItem.bind(this);
     this.handleToggleAllComplete = this.handleToggleAllComplete.bind(this);
+  }
+
+  setSource(items, itemsDatasource, otherState = {}) {
+    this.setState({
+      items,
+      dataSource: this.state.dataSource.cloneWithRows(itemsDatasource),
+      ...otherState
+    })
   }
 
   handleAddItem(){
@@ -57,21 +67,31 @@ class App extends Component {
     this.setSource(newItems, newItems, {value: ''})
   }
 
-  setSource(items, itemsDatasource, otherState = {}) {
-    this.setState({
-      items,
-      dataSource: this.state.dataSource.cloneWithRows(itemsDatasource),
-      ...otherState
-    })
-  }
-
   handleToggleAllComplete() {
     const complete = !this.state.allComplete;
     const newItems = this.state.items.map((item) => ({
       ...item,
       complete
     }))
-  this.setSource(newItems, newItems, { allComplete: complete })
+    this.setSource(newItems, newItems, { allComplete: complete })
+  }
+
+  handleRemoveItem(key) {
+    const newItems = this.state.items.filter((item) => {
+      return item.key !== key
+    })
+    this.setSource(newItems, newItems)
+  }
+
+  handleToggleComplete(key, complete) {
+    const newItems = this.state.items.map((item) => {
+      if (item.key !== key) return item;
+      return {
+        ...item,
+        complete
+      }
+    })
+    this.setSource(newItems, newItems);
   }
 
   render() {
@@ -94,7 +114,9 @@ class App extends Component {
               return (
                 <Row
                   key={key}
+                  onComplete={(complete) => this.handleToggleComplete(key, complete)}
                   {...value}
+                  onRemove={() => this.handleRemoveItem(key)}
                 />
               )
             }}
