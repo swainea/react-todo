@@ -1,5 +1,5 @@
 import React, { Component } from 'react';
-import { View, Text, StyleSheet, Platform, ListView, Keyboard } from 'react-native';
+import { View, Text, StyleSheet, Platform, ListView, Keyboard, ActivityIndicator, AsyncStorage } from 'react-native';
 import Header from './header';
 import Footer from './footer';
 import Row from './row';
@@ -21,8 +21,26 @@ const styles = StyleSheet.create({
   },
   list : {
     backgroundColor: '#fff'
+  },
+  loading: {
+    position: "absolute",
+    left: 0,
+    top: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(0,0,0,.2)"
   }
 })
+
+const filterItems = (filter, items) => {
+  return items.filter((item) => {
+    if (filter === "ALL") return true;
+    if (filter === "COMPLETED") return item.complete;
+    if (filter === "ACTIVE") return !item.complete;
+  })
+}
 
 class App extends Component {
 
@@ -31,15 +49,35 @@ class App extends Component {
     const ds = new ListView.DataSource({ rowHasChanged: (r1, r2) => r1 !== r2});
     this.state = {
       allComplete: false,
+      loading: true,
+      filter: "ALL",
       value: '',
       items: [],
       dataSource: ds.cloneWithRows([])
     }
+    this.handleFilter = this.handleFilter.bind(this);
     this.handleRemoveItem = this.handleRemoveItem.bind(this);
     this.handleToggleComplete = this.handleToggleComplete.bind(this);
     this.setSource = this.setSource.bind(this);
     this.handleAddItem = this.handleAddItem.bind(this);
     this.handleToggleAllComplete = this.handleToggleAllComplete.bind(this);
+    this.handleClearComplete = this.handleClearComplete.bind(this);
+    this.handleUpdateText = this.handleUpdateText.bind(this);
+    this.handleToggleEdit = this.handleToggleEdit.bind(this);
+  }
+
+  componentWillMount() {
+    AsyncStorage.getItem("items").then((json) => {
+      try {
+        const items = JSON.parse(json);
+        // once mounted loading is false
+        this.setSource(items, items, { loading: false });
+      } catch(e) {
+        this.setState({
+          loading: false
+        })
+      }
+    })
   }
 
   setSource(items, itemsDatasource, otherState = {}) {
@@ -48,6 +86,11 @@ class App extends Component {
       dataSource: this.state.dataSource.cloneWithRows(itemsDatasource),
       ...otherState
     })
+    AsyncStorage.setItem("items", JSON.stringify(items));
+  }
+
+  handleFilter(filter) {
+    this.setSource(this.state.items, filterItems(filter, this.state.items), { filter })
   }
 
   handleAddItem(){
@@ -64,7 +107,7 @@ class App extends Component {
       }
     ]
     // takes in new items and clears the text imput
-    this.setSource(newItems, newItems, {value: ''})
+    this.setSource(newItems, filterItems(this.state.filter, newItems), {value: ''})
   }
 
   handleToggleAllComplete() {
@@ -73,14 +116,41 @@ class App extends Component {
       ...item,
       complete
     }))
-    this.setSource(newItems, newItems, { allComplete: complete })
+    this.setSource(newItems, filterItems(this.state.filter, newItems), { allComplete: complete })
+  }
+
+  handleUpdateText(key,text) {
+    const newItems = this.state.items.map((item) => {
+      if (item.key !== key) return item;
+      return {
+        ...item,
+        text
+      }
+    })
+    this.setSource(newItems, filterItems(this.state.filter, newItems));
+  }
+
+  handleToggleEdit(key, editing) {
+    const newItems = this.state.items.map((item) => {
+      if (item.key !== key) return item;
+      return {
+        ...item,
+        editing
+      }
+    })
+    this.setSource(newItems, filterItems(this.state.filter, newItems));
   }
 
   handleRemoveItem(key) {
     const newItems = this.state.items.filter((item) => {
       return item.key !== key
     })
-    this.setSource(newItems, newItems)
+    this.setSource(newItems, filterItems(this.state.filter, newItems))
+  }
+
+  handleClearComplete() {
+    const newItems = filterItems("ACTIVE", this.state.items);
+    this.setSource(newItems, filterItems(this.state.filter, newItems));
   }
 
   handleToggleComplete(key, complete) {
@@ -91,7 +161,7 @@ class App extends Component {
         complete
       }
     })
-    this.setSource(newItems, newItems);
+    this.setSource(newItems, filterItems(this.state.filter, newItems));
   }
 
   render() {
@@ -117,6 +187,8 @@ class App extends Component {
                   onComplete={(complete) => this.handleToggleComplete(key, complete)}
                   {...value}
                   onRemove={() => this.handleRemoveItem(key)}
+                  onUpdate={(text) => this.handleUpdateText(key,text)}
+                  onToggleEdit={(editing) => this.handleToggleEdit(key,editing)}
                 />
               )
             }}
@@ -125,7 +197,18 @@ class App extends Component {
             }}
           />
         </View>
-        <Footer />
+        <Footer
+          count={filterItems("ACTIVE", this.state.items).length}
+          onFilter={this.handleFilter}
+          filter={this.state.filter}
+          onClearComplete={this.handleClearComplete}
+        />
+        {this.state.loading && <View style={styles.loading}>
+          <ActivityIndicator
+            animating
+            size="large"
+          />
+        </View>}
       </View>
     );
   }
